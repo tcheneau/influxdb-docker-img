@@ -1,12 +1,26 @@
-FROM tutum/curl:trusty
-MAINTAINER François-Guillaume Ribreau <docker@fgribreau.com>
+FROM armhf-archlinux
+MAINTAINER Tony Cheneau <tony.cheneau@amnesiak.org>
 
-# Install InfluxDB
-ENV INFLUXDB_VERSION 1.0.0
-RUN curl -s -o /tmp/influxdb_latest_amd64.deb https://dl.influxdata.com/influxdb/releases/influxdb_${INFLUXDB_VERSION}_amd64.deb && \
-  dpkg -i /tmp/influxdb_latest_amd64.deb && \
-  rm /tmp/influxdb_latest_amd64.deb && \
-  rm -rf /var/lib/apt/lists/*
+RUN pacman -Sy \
+	&& pacman --noconfirm -S git go
+
+ENV INFLUXDB_VERSION 1.1.1
+ENV GOPATH /tmp/go
+
+# Build InfluxDB from source
+RUN mkdir -p $GOPATH/src/github.com/influxdata \
+	&& cd $GOPATH/src/github.com/influxdata \
+	&& git clone https://github.com/influxdata/influxdb \
+	&& cd influxdb \
+	#&& git checkout tags/v${INFLUXDB_VERSION} \
+	&& git checkout master \
+	# go get -u sometime fails first time, but succeeds second time
+	# (see https://github.com/golang/go/issues/9224)
+	# therefore, we try it a second time, if it failed the first time
+	&& ( go get -u -f ./... || go get -u -f ./... || true) \
+	&& go build ./... \
+	&& mv $GOPATH/bin/* /usr/bin \
+	&& rm -rf $GOPATH/*
 
 ADD types.db /usr/share/collectd/types.db
 ADD config.toml /config/config.toml
